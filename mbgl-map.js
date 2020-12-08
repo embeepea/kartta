@@ -96,7 +96,64 @@ const updatePageUrl = (params) => {
       location.origin + location.pathname + '?' + url.searchParams.toString() + location.hash);
 };
 
+
+// Extract photo annotatioin data from editor api db data.
+// Takes a json object containing editor api data (from the endpoint '/e/api/0.6/map?bbox=...').
+// Returns an array containing one json object for each photo annotation; each object looks like:
+//     {
+//       buildingId: < the building id (way id) of a building >
+//       noterAnnotationId: < id for the annotation in noter >
+//       noterImageId: < id for the image in noter >
+//       facadeLine: < coordinates of the facade line for the photo >
+//     }
+function photoAnnotations(json) {
+  const elements = {
+    'node': {},
+    'way': {},
+    'relation': {}
+  };
+  json.elements.forEach(element => {
+    elements[element.type][element.id] = element;
+  });
+  const noterAnnotationRelationIds = Object.keys(elements['relation']).filter(id => 'noter_annotation_id' in elements.relation[id].tags);
+  return noterAnnotationRelationIds.map(id => {
+    const relation = elements.relation[id];
+    const buildingId = relation.members.filter(member => member.role == 'footprint')[0].ref;
+    const facadeLineId = relation.members.filter(member => member.role == 'facadeline')[0].ref;
+    const facadeLineNodeIds = elements.way[facadeLineId].nodes;
+    const facadeLineNodes = facadeLineNodeIds.map(id => elements['node'][id]);
+    const facadeLine = facadeLineNodes.map(node => [node.lon, node.lat]);
+    return {
+      buildingId: buildingId,
+      noterAnnotationId: relation.tags.noter_annotation_id,
+      noterImageId: relation.tags.noter_image_id,
+      facadeLine: facadeLine
+    };
+  });
+};
+
+
+const photoTest = () => {
+  url = 'https://re.city/e/api/0.6/map?bbox=4.9,52.372,4.901,52.373';
+  fetch(url, {
+    headers: {
+      Accept: 'application/json'
+    }
+  }).then(response => {
+    return response.json();
+  }).then(response => {
+    console.log(translate(response));
+  }).catch(error => {
+    console.log('Error:', error);
+  })
+};
+
+
+
 document.addEventListener("DOMContentLoaded", function(){
+
+  photoTest();
+
   const params = (new URL(document.location)).searchParams;
 
   let currentYear = params.has("year") ? parseInt(params.get("year")) : "{{ INITIAL_YEAR }}";
